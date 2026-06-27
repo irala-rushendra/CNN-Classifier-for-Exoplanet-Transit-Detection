@@ -1,6 +1,6 @@
 # TESS Exoplanet Classifier
 
-A 1D dual-branch CNN that classifies TESS light curves into 6 disposition categories: Planet Candidate (PC), False Positive (FP), Confirmed Planet (CP), Kepler Candidate (KP), Astrophysical Candidate (APC), and False Alarm (FA).
+A 1D dual-branch CNN that classifies TESS light curves into 6 disposition categories: Planet Candidate (PC), False Positive (FP), Confirmed Planet (CP), Kepler Candidate (KP), Astrophysical Candidate (APC), and False Alarm (FA). Built as a part of ISRO Bharatiya Hackathon 2026.
 (This is still undergoing project)
 ## Architecture
 
