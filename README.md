@@ -6,6 +6,9 @@ A 1D dual-branch CNN that classifies TESS light curves to help astronomers triag
 
 ---
 
+| [Classification](#classification-scope) | [Architecture](#architecture) | [Setup](#setup) | [Pipeline](#pipeline) | [Project Structure](#project-structure) | [Roadmap](#roadmap) | [License](#license) |
+|---|---|---|---|---|---|---|
+
 ## Classification Scope
 
 ### Current Prototype (4-Class)
@@ -40,9 +43,13 @@ Migrating to this scheme is the next development milestone. It requires a larger
 
 ## Architecture
 
+![Architecture Diagram 1](assets/Screenshot%20from%202026-06-30%2001-55-41.png)
+
 - **Global view branch**: processes the full folded light curve (2001 time steps) through 3 convolutional blocks to capture long-term orbital behavior.
 - **Local view branch**: processes a zoomed-in transit window (201 time steps) through 2 convolutional blocks to capture fine-grained transit geometry.
 - **Merged head**: concatenated features from both branches → 3 fully-connected layers with dropout → softmax output (currently 4-way; architecture is extensible to 6-way as the labeled dataset expands).
+
+![Architecture Diagram 2](assets/Screenshot%20from%202026-06-30%2001-57-04.png)
 
 ---
 
@@ -82,10 +89,14 @@ python train.py --dataset data/processed/training_dataset.pt --epochs 100 --lr 5
 python evaluate.py
 ```
 
+![Confusion Matrix](assets/confusion_matrix.png)
+
 ### 5. Run inference (synthetic demo)
 ```bash
 python predict.py
 ```
+
+![Prediction Report](assets/prediction_report.png)
 
 ### Custom paths
 All scripts accept `--dataset`, `--weights`, and `--batch-size` arguments where applicable.
