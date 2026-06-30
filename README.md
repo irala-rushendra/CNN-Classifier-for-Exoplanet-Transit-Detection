@@ -112,6 +112,7 @@ All scripts accept `--dataset`, `--weights`, and `--batch-size` arguments where 
 ├── evaluate.py             # Evaluate on test set
 ├── predict.py               # Inference with synthetic data
 ├── src/
+│   ├── classifier.py       # LightCurveClassifier — inference wrapper
 │   ├── model.py            # ExoplanetDualBranchCNN definition
 │   └── utils.py             # Shared constants and helpers
 ├── data/
@@ -129,6 +130,89 @@ All scripts accept `--dataset`, `--weights`, and `--batch-size` arguments where 
 - [ ] Expand labeled catalog to support full 6-class TOI disposition taxonomy
 - [ ] Validate model performance on held-out real TESS light curves (not just synthetic data)
 - [ ] Migrate softmax output layer from 4-way → 6-way classification
+
+---
+
+## Custom Classes & Functions
+
+### `src/classifier.py`
+
+#### `class LightCurveClassifier`
+High-level inference wrapper that accepts a `lightkurve.FoldedLightCurve`, transforms it into the global/local tensor format expected by `ExoplanetDualBranchCNN`, and returns class predictions.
+
+**Constructor:**
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `model` | `ExoplanetDualBranchCNN` | — | Trained model instance (already loaded with weights). |
+| `class_map` | `dict[int, str]` | `None` | Optional custom label mapping. Falls back to `CLASS_LABELS` from `utils.py` if `None`. |
+
+**`transform(folded_lc, global_length=2001, local_length=201, fluxt='pdcsap', ret=False)`:**
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `folded_lc` | `lightkurve.FoldedLightCurve` | — | Phase-folded light curve with `.time` and `.flux` arrays. |
+| `global_length` | `int` | `2001` | Number of points in the interpolated global view. |
+| `local_length` | `int` | `201` | Number of points in the zoomed local window. |
+| `fluxt` | `str` | `'pdcsap'` | Flux type to use. If `'pdcsap'`, uses `.flux`; otherwise uses `.sap_flux`. |
+| `ret` | `bool` | `False` | If `True`, returns `(global_tensor, local_tensor)` instead of storing them internally. |
+
+**`predict(report=False)`:**
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `report` | `bool` | `False` | If `True`, prints formatted per-class probabilities to stdout. |
+
+**Returns:** `tuple[int, np.ndarray]` — `(pred_class_idx, probabilities)` where `probabilities` is a 1D array of softmax scores for all classes.
+
+**Usage examples:**
+```python
+# Real light curve
+from src import ExoplanetDualBranchCNN, LightCurveClassifier
+import lightkurve as lk
+import torch
+
+model = ExoplanetDualBranchCNN()
+model.load_state_dict(torch.load("weights/best_model.pth", map_location="cpu"))
+clf = LightCurveClassifier(model)
+
+lc = lk.search_lightcurve("TIC 150428135").download().fold(period=...)
+clf.transform(lc)
+idx, probs = clf.predict(report=True)
+
+# Synthetic data (no lightkurve required)
+from src.model import ExoplanetDualBranchCNN
+from src.classifier import LightCurveClassifier
+from build_dataset import generate_sample
+import torch
+
+model = ExoplanetDualBranchCNN()
+model.load_state_dict(torch.load("weights/best_model.pth", map_location="cpu"))
+clf = LightCurveClassifier(model)
+
+global_tensor, local_tensor = generate_sample(class_id=0)
+clf.global_tensor = global_tensor
+clf.local_tensor = local_tensor
+idx, probs = clf.predict(report=True)
+print(f"Predicted: {clf.class_map[idx]} ({probs[idx]*100:.2f}%)")
+```
+
+### `src/model.py`
+
+#### `class ExoplanetDualBranchCNN(nn.Module)`
+1D dual-branch CNN for TESS light curve classification.
+
+| Method | Description |
+|---|---|
+| `__init__(global_length=2001, local_length=201, num_classes=4)` | Builds global (3 conv blocks) and local (2 conv blocks) branches, infers flattened dimensions via dummy forward pass, and constructs the merged classifier head (fc1–fc3 → fc_out). |
+| `_forward_global(x)` | Pushes `x` through 3 Conv1D blocks (16→32→64 channels) with batch norm and max pooling, returns flattened features. |
+| `_forward_local(x)` | Pushes `x` through 2 Conv1D blocks (16→32 channels) with batch norm and max pooling, returns flattened features. |
+| `forward(global_input, local_input)` | Runs both branches, concatenates features, passes through 3 FC layers (512→256→128) with ReLU + dropout (0.3), returns logits of shape `(batch, num_classes)`. |
+
+### `src/utils.py`
+
+| Symbol | Type | Description |
+|---|---|---|
+| `CLASS_LABELS` | `dict[int, str]` | Maps class index (0–3) to long name: `Planet`, `Eclipsing Binary`, `False Positive`, `Stellar Variability`. |
+| `CLASS_NAMES_SHORT` | `dict[int, str]` | Maps class index to short label: `Planet`, `EB`, `FP`, `SV`. |
+| `get_device()` | Function | Returns `torch.device("cuda")` if GPU is available, else `torch.device("cpu")`. |
 
 ---
 
